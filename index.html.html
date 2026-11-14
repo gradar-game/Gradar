@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="hr" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>GRADAR — European City Guesser</title>
+  <meta name="description" content="Guess the secret European city in 6 tries with distance compass, population comparison, and capital clues." />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #090d16;
+      color: #f8fafc;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+    }
+
+    @keyframes tileReveal {
+      0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.92);
+      }
+      70% {
+        opacity: 1;
+        transform: translateY(-2px) scale(1.02);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes shakeInput {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+
+    @keyframes modalPop {
+      from {
+        opacity: 0;
+        transform: scale(0.95) translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .animate-tile {
+      opacity: 0;
+      animation: tileReveal 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    .animate-shake {
+      animation: shakeInput 0.35s ease-in-out;
+    }
+
+    .animate-modal {
+      animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#090d16] text-[#f8fafc] selection:bg-cyan-500/30 selection:text-cyan-200">
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-30 w-full bg-[#090d16]/90 backdrop-blur-md border-b border-slate-800/80">
+    <div class="max-w-4xl mx-auto px-3 sm:px-5 h-16 flex items-center justify-between gap-2">
+
+      <!-- Brand Logo & Title -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/25 to-blue-500/15 border border-cyan-500/40 flex items-center justify-center shrink-0 shadow-sm shadow-cyan-500/10">
+          <svg class="w-5 h-5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <circle cx="12" cy="12" r="6"></circle>
+            <circle cx="12" cy="12" r="2"></circle>
+          </svg>
+        </div>
+        <div class="truncate">
+          <h1 class="text-base sm:text-xl font-black tracking-tight text-white leading-none">
+            GRADAR
+          </h1>
+          <p id="subtitleText" class="text-[11px] font-medium text-slate-400 mt-0.5 truncate">
+            Dnevni grad #1
+          </p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher (Daily vs Unlimited) -->
+      <div class="flex items-center bg-[#111827] p-1 rounded-xl border border-slate-800 shrink-0" role="tablist">
+        <button
+          id="btnModeDaily"
+          type="button"
+          onclick="switchMode('daily')"
+          class="px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-cyan-500 text-slate-950 shadow-sm cursor-pointer"
+        >
+          Daily
+        </button>
+        <button
+          id="btnModeUnlimited"
+          type="button"
+          onclick="switchMode('unlimited')"
+          class="px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-300 hover:text-white cursor-pointer"
+        >
+          Unlimited
+        </button>
+      </div>
+
+      <!-- Right Controls: Language Toggle (HR/EN), Help, Stats -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button
+          id="langToggleBtn"
+          type="button"
+          onclick="toggleLanguage()"
+          title="Switch Language (HR / EN)"
+          class="h-9 px-2.5 rounded-xl bg-[#111827] hover:bg-slate-800 border border-slate-800 text-xs font-extrabold text-amber-400 tracking-wide transition-colors cursor-pointer"
+        >
+          HR
+        </button>
+        <button
+          type="button"
+          onclick="openModal('helpModal')"
+          aria-label="How to Play"
+          class="w-9 h-9 rounded-xl bg-[#111827] hover:bg-slate-800 border border-slate-800 flex items-center justify-center text-slate-300 hover:text-white font-bold text-sm transition-colors cursor-pointer"
+        >
+          ?
+        </button>
+        <button
+          type="button"
+          onclick="openStatsModal()"
+          aria-label="Statistics"
+          class="w-9 h-9 rounded-xl bg-[#111827] hover:bg-slate-800 border border-slate-800 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer"
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Game Container -->
+  <main class="flex-1 w-full max-w-4xl mx-auto px-2.5 sm:px-5 py-4 sm:py-6 flex flex-col gap-4">
+
+    <!-- Input & Summary Panel -->
+    <section class="bg-[#111827] border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl shadow-black/25">
+      <div class="flex items-center justify-between mb-2">
+        <span id="promptHeading" class="text-xs font-bold uppercase tracking-wider text-slate-400">
+          Pogodi tajanstveni europski grad
+        </span>
+        <span id="attemptCounter" class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#090d16] border border-slate-800 text-cyan-400">
+          Pokušaj 1 / 6
+        </span>
+      </div>
+
+      <p id="helperSubtext" class="text-xs text-slate-400 mb-3.5 leading-relaxed">
+        Upiši bilo koji europski grad. Svaki pokušaj otkriva udaljenost s kompasom, usporedbu populacije i status glavnog grada.
+      </p>
+
+      <!-- Search Input Box -->
+      <div id="searchBoxWrapper" class="relative">
+        <div class="relative flex items-center">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            id="cityInput"
+            type="text"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+            placeholder="Upiši grad (npr. Zagreb, Beč, Prag, Pariz)..."
+            class="w-full pl-10 pr-24 py-3 sm:py-3.5 rounded-xl bg-[#090d16] border border-slate-700/80 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 outline-none text-sm sm:text-base text-white placeholder-slate-500 transition-all"
+          />
+          <button
+            id="guessSubmitBtn"
+            type="button"
+            onclick="handleManualGuess()"
+            class="absolute right-1.5 px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 active:scale-95 text-slate-950 font-extrabold text-xs sm:text-sm transition-all cursor-pointer"
+          >
+            Pogodi
+          </button>
+        </div>
+
+        <!-- Autocomplete Dropdown -->
+        <ul
+          id="dropdownList"
+          role="listbox"
+          class="hidden absolute left-0 right-0 mt-1.5 max-h-60 overflow-y-auto custom-scroll bg-[#111827] border border-slate-700 rounded-xl shadow-2xl shadow-black/80 z-20 divide-y divide-slate-800"
+        ></ul>
+      </div>
+
+      <!-- End-of-Round Result Card -->
+      <div id="endResultCard" class="hidden mt-4 pt-4 border-t border-slate-800 animate-modal">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div id="endCityEmoji" class="text-3xl w-14 h-14 rounded-2xl bg-[#090d16] border border-slate-800 flex items-center justify-center shrink-0">
+              🏰
+            </div>
+            <div>
+              <span id="endBadge" class="inline-block text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                Pogođeno!
+              </span>
+              <h2 id="endCityTitle" class="text-lg sm:text-xl font-black text-white mt-0.5">
+                Zagreb, Hrvatska
+              </h2>
+              <p id="endFunFact" class="text-xs text-slate-300 mt-1 leading-relaxed">
+                Zanimljivost o gradu...
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3.5 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onclick="shareResult()"
+            class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 active:scale-95 text-slate-950 font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/20 transition-all cursor-pointer"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+            <span id="shareBtnLabel">Podijeli rezultat</span>
+          </button>
+
+          <button
+            id="nextUnlimitedBtn"
+            type="button"
+            onclick="startUnlimitedRound()"
+            class="hidden flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm border border-slate-700 transition-all cursor-pointer"
+          >
+            <span id="nextBtnLabel">Novi grad →</span>
+          </button>
+
+          <div id="countdownPill" class="hidden ml-auto text-xs text-slate-400 bg-[#090d16] px-3 py-2 rounded-xl border border-slate-800">
+            <span id="nextDailyText">Sljedeći za:</span>
+            <span id="countdownClock" class="font-mono font-bold text-cyan-400 ml-1">00:00:00</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5-Column Deduction Grid -->
+    <section class="bg-[#111827] border border-slate-800 rounded-2xl p-2 sm:p-4 shadow-xl shadow-black/25">
+      <!-- Column Headers -->
+      <div class="grid grid-cols-5 gap-1 sm:gap-2 pb-2.5 mb-2 border-b border-slate-800 text-center">
+        <div id="colHeader0" class="text-[9px] sm:text-xs font-extrabold uppercase tracking-wider text-slate-400">Grad</div>
+        <div id="colHeader1" class="text-[9px] sm:text-xs font-extrabold uppercase tracking-wider text-slate-400">Država</div>
+        <div id="colHeader2" class="text-[9px] sm:text-xs font-extrabold uppercase tracking-wider text-slate-400">Udaljenost</div>
+        <div id="colHeader3" class="text-[9px] sm:text-xs font-extrabold uppercase tracking-wider text-slate-400">Populacija</div>
+        <div id="colHeader4" class="text-[9px] sm:text-xs font-extrabold uppercase tracking-wider text-slate-400">Glavni grad</div>
+      </div>
+
+      <!-- 6 Guess Rows -->
+      <div id="deductionGrid" class="flex flex-col gap-1.5 sm:gap-2"></div>
+
+      <!-- Color Legend -->
+      <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-slate-400">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-sm bg-cyan-500 inline-block"></span>
+          <span id="legendExact">Točno</span>
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block"></span>
+          <span id="legendClose">Blizu (&lt;500 km)</span>
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-sm bg-slate-700 inline-block"></span>
+          <span id="legendMiss">Netočno</span>
+        </span>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="w-full max-w-4xl mx-auto px-4 py-4 text-center text-xs text-slate-500">
+    GRADAR • European City Guesser
+  </footer>
+
+  <!-- Toast Notification -->
+  <div id="toast" role="status" aria-live="polite" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-200">
+    <div id="toastMsg" class="px-4 py-2.5 rounded-xl bg-slate-900/95 border border-cyan-500/40 text-white text-xs sm:text-sm font-bold shadow-2xl backdrop-blur-md">
+      Kopirano u međuspremnik!
+    </div>
+  </div>
+
+  <!-- HOW TO PLAY MODAL -->
+  <div id="helpModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4" onclick="closeBackdrop(event, 'helpModal')">
+    <div class="bg-[#111827] border border-slate-800 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl animate-modal max-h-[90vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h2 id="helpTitle" class="text-lg font-black text-white">Kako igrati GRADAR</h2>
+        <button type="button" onclick="closeModal('helpModal')" class="w-8 h-8 rounded-lg bg-[#090d16] hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+      <div id="helpBody" class="mt-4 space-y-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
+        <p>Pogodi tajanstveni europski grad u najviše <strong class="text-white">6 pokušaja</strong>.</p>
+        <div class="bg-[#090d16] p-3.5 rounded-xl border border-slate-800 space-y-2">
+          <p><strong class="text-cyan-400">🧭 Udaljenost i smjer:</strong> Svaki pokušaj prikazuje udaljenost u kilometrima i strelicu kompasa (npr. ↗️ 340 km) koja pokazuje u kojem smjeru se traženi grad nalazi od tvog unosa.</p>
+          <p><strong class="text-amber-400">👥 Populacija:</strong> Strelice <strong class="text-white">⬆️</strong> / <strong class="text-white">⬇️</strong> pokazuju je li traženi grad veći ili manji.</p>
+          <p><strong class="text-emerald-400">🏛️ Glavni grad:</strong> Pokazuje je li traženi grad nacionalna prijestolnica.</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeModal('helpModal')" class="mt-5 w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-sm transition-colors cursor-pointer">
+        Krenimo!
+      </button>
+    </div>
+  </div>
+
+  <!-- STATS MODAL -->
+  <div id="statsModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4" onclick="closeBackdrop(event, 'statsModal')">
+    <div class="bg-[#111827] border border-slate-800 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl animate-modal">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h2 id="statsTitle" class="text-lg font-black text-white">Statistika (Daily)</h2>
+        <button type="button" onclick="closeModal('statsModal')" class="w-8 h-8 rounded-lg bg-[#090d16] hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div class="grid grid-cols-4 gap-2 mt-4 text-center">
+        <div class="bg-[#090d16] border border-slate-800 rounded-xl p-2.5">
+          <div id="stPlayed" class="text-xl font-black text-white">0</div>
+          <div id="stLblPlayed" class="text-[10px] text-slate-400 mt-0.5">Odigrano</div>
+        </div>
+        <div class="bg-[#090d16] border border-slate-800 rounded-xl p-2.5">
+          <div id="stWin" class="text-xl font-black text-cyan-400">0%</div>
+          <div id="stLblWin" class="text-[10px] text-slate-400 mt-0.5">Pobjede</div>
+        </div>
+        <div class="bg-[#090d16] border border-slate-800 rounded-xl p-2.5">
+          <div id="stStreak" class="text-xl font-black text-amber-400">0</div>
+          <div id="stLblStreak" class="text-[10px] text-slate-400 mt-0.5">Niz</div>
+        </div>
+        <div class="bg-[#090d16] border border-slate-800 rounded-xl p-2.5">
+          <div id="stMax" class="text-xl font-black text-white">0</div>
+          <div id="stLblMax" class="text-[10px] text-slate-400 mt-0.5">Rekord</div>
+        </div>
+      </div>
+
+      <div class="mt-5">
+        <h3 id="stDistTitle" class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Raspodjela pokušaja</h3>
+        <div id="stBars" class="space-y-1.5"></div>
+      </div>
+
+      <button type="button" onclick="closeModal('statsModal')" class="mt-5 w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm cursor-pointer">
+        Zatvori
+      </button>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * GRADAR — European Cities Database (Bilingual EN/HR + Coordinates + Population + Capital Status)
+     */
+    const CITIES = [
+      { id: "zagreb", nameHr: "Zagreb", nameEn: "Zagreb", countryHr: "Hrvatska", countryEn: "Croatia", flag: "🇭🇷", pop: 769000, isCapital: true, lat: 45.8150, lng: 15.9819, factHr: "Zagreb ima poznatu uspinjaču iz 1890. godine koja je najkraća na svijetu.", factEn: "Zagreb's funicular built in 1890 is one of the shortest public transport funiculars in the world." },
+      { id: "beograd", nameHr: "Beograd", nameEn: "Belgrade", countryHr: "Srbija", countryEn: "Serbia", flag: "🇷🇸", pop: 1374000, isCapital: true, lat: 44.7866, lng: 20.4489, factHr: "Beograd je smješten na ušću dviju velikih rijeka: Dunava i Save.", factEn: "Belgrade is built at the confluence of two major European rivers: the Danube and Sava." },
+      { id: "sarajevo", nameHr: "Sarajevo", nameEn: "Sarajevo", countryHr: "Bosna i Hercegovina", countryEn: "Bosnia and Herzegovina", flag: "🇧🇦", pop: 275000, isCapital: true, lat: 43.8563, lng: 18.4131, factHr: "Sarajevo je bilo domaćin Zimskih olimpijskih igara 1984. godine.", factEn: "Sarajevo hosted the Winter Olympic Games in 1984." },
+      { id: "ljubljana", nameHr: "Ljubljana", nameEn: "Ljubljana", countryHr: "Slovenija", countryEn: "Slovenia", flag: "🇸🇮", pop: 284000, isCapital: true, lat: 46.0569, lng: 14.5058, factHr: "Ljubljana slovi kao jedan od najzelenijih glavnih gradova u Europi.", factEn: "Ljubljana is renowned as one of the greenest and most sustainable capitals in Europe." },
+      { id: "bec", nameHr: "Beč", nameEn: "Vienna", countryHr: "Austrija", countryEn: "Austria", flag: "🇦🇹", pop: 1982000, isCapital: true, lat: 48.2082, lng: 16.3738, factHr: "Beč je dugi niz godina proglašavan gradom s najvišom kvalitetom života na svijetu.", factEn: "Vienna has repeatedly been ranked as the city with the highest quality of life globally." },
+      { id: "budimpesta", nameHr: "Budimpešta", nameEn: "Budapest", countryHr: "Mađarska", countryEn: "Hungary", flag: "🇭🇺", pop: 1752000, isCapital: true, lat: 47.4979, lng: 19.0402, factHr: "Budimpešta je nastala spajanjem dvaju povijesnih gradova: Buda i Pešte.", factEn: "Budapest was formed by the unification of three distinct cities: Buda, Pest, and Óbuda." },
+      { id: "prag", nameHr: "Prag", nameEn: "Prague", countryHr: "Češka", countryEn: "Czech Republic", flag: "🇨🇿", pop: 1357000, isCapital: true, lat: 50.0755, lng: 14.4378, factHr: "Praški dvorac najveći je drevni dvorac na svijetu prema Guinnessovoj knjizi rekorda.", factEn: "Prague Castle is recognized by Guinness World Records as the largest ancient castle complex." },
+      { id: "rim", nameHr: "Rim", nameEn: "Rome", countryHr: "Italija", countryEn: "Italy", flag: "🇮🇹", pop: 2860000, isCapital: true, lat: 41.9028, lng: 12.4964, factHr: "U Rimu se nalazi država unutar grada — Vatikan.", factEn: "Rome completely surrounds Vatican City, making it a country within a city." },
+      { id: "pariz", nameHr: "Pariz", nameEn: "Paris", countryHr: "Francuska", countryEn: "France", flag: "🇫🇷", pop: 2140000, isCapital: true, lat: 48.8566, lng: 2.3522, factHr: "Eiffelov toranj je bio zamišljen kao privremena građevina za Svjetsku izložbu 1889.", factEn: "The Eiffel Tower was originally built as a temporary entrance arch for the 1889 World's Fair." },
+      { id: "berlin", nameHr: "Berlin", nameEn: "Berlin", countryHr: "Njemačka", countryEn: "Germany", flag: "🇩🇪", pop: 3850000, isCapital: true, lat: 52.5200, lng: 13.4050, factHr: "Berlin ima više mostova nego Venecija.", factEn: "Berlin reportedly has more bridges than Venice." },
+      { id: "madrid", nameHr: "Madrid", nameEn: "Madrid", countryHr: "Španjolska", countryEn: "Spain", flag: "🇪🇸", pop: 3334000, isCapital: true, lat: 40.4168, lng: -3.7038, factHr: "Madrid je jedan od najviših glavnih gradova u Europi, na nadmorskoj visini od 650 m.", factEn: "Madrid is one of the highest capital cities in Europe, situated 650 meters above sea level." },
+      { id: "atena", nameHr: "Atena", nameEn: "Athens", countryHr: "Grčka", countryEn: "Greece", flag: "🇬🇷", pop: 664000, isCapital: true, lat: 37.9838, lng: 23.7275, factHr: "Atena je jedan od najstarijih kontinuirano naseljenih gradova na svijetu preko 3.400 godina.", factEn: "Athens is one of the world's oldest cities, with recorded history spanning over 3,400 years." },
+      { id: "amsterdam", nameHr: "Amsterdam", nameEn: "Amsterdam", countryHr: "Nizozemska", countryEn: "Netherlands", flag: "🇳🇱", pop: 921000, isCapital: true, lat: 52.3676, lng: 4.9041, factHr: "U Amsterdamu ima više bicikala nego stanovnika.", factEn: "Amsterdam has more bicycles than residents." },
+      { id: "varsava", nameHr: "Varšava", nameEn: "Warsaw", countryHr: "Poljska", countryEn: "Poland", flag: "🇵🇱", pop: 1860000, isCapital: true, lat: 52.2297, lng: 21.0122, factHr: "Stari grad u Varšavi je u potpunosti obnovljen nakon Drugog svjetskog rata.", factEn: "Warsaw's historic Old Town was meticulously rebuilt after being almost entirely destroyed." },
+      { id: "zurich", nameHr: "Zürich", nameEn: "Zurich", countryHr: "Švicarska", countryEn: "Switzerland", flag: "🇨🇭", pop: 443000, isCapital: false, lat: 47.3769, lng: 8.5417, factHr: "Zürich je financijsko središte Švicarske, iako glavni grad Bern.", factEn: "Zurich is Switzerland's economic powerhouse, though Bern serves as the official capital." },
+      { id: "minhen", nameHr: "München", nameEn: "Munich", countryHr: "Njemačka", countryEn: "Germany", flag: "🇩🇪", pop: 1488000, isCapital: false, lat: 48.1351, lng: 11.5820, factHr: "München je dom najvećeg pivskog festivala na svijetu — Oktoberfesta.", factEn: "Munich hosts Oktoberfest, the world's largest Volksfest." },
+      { id: "london", nameHr: "London", nameEn: "London", countryHr: "Ujedinjeno Kraljevstvo", countryEn: "United Kingdom", flag: "🇬🇧", pop: 8797000, isCapital: true, lat: 51.5074, lng: -0.1278, factHr: "Londonska podzemna željeznica (Tube) najstarija je podzemna željeznica na svijetu.", factEn: "The London Underground opened in 1863, making it the world's oldest underground railway network." },
+      { id: "stockholm", nameHr: "Stockholm", nameEn: "Stockholm", countryHr: "Švedska", countryEn: "Sweden", flag: "🇸🇪", pop: 978000, isCapital: true, lat: 59.3293, lng: 18.0686, factHr: "Stockholm se prostire na 14 otoka povezanih s preko 50 mostova.", factEn: "Stockholm is built across 14 islands connected by 57 bridges." },
+      { id: "oslo", nameHr: "Oslo", nameEn: "Oslo", countryHr: "Norveška", countryEn: "Norway", flag: "🇳🇴", pop: 699000, isCapital: true, lat: 59.9139, lng: 10.7522, factHr: "Oslo je jedan od najbrže rastućih gradova u Europi po ekološkoj održivosti.", factEn: "Oslo is globally recognized for its green energy transition and electric vehicle adoption." },
+      { id: "helsinki", nameHr: "Helsinki", nameEn: "Helsinki", countryHr: "Finska", countryEn: "Finland", flag: "🇫🇮", pop: 658000, isCapital: true, lat: 60.1699, lng: 24.9384, factHr: "Helsinki je izgrađen na poluotoku i brojnim otocima u Finskom zaljevu.", factEn: "Helsinki features extensive seaside architecture and hundreds of surrounding islands." },
+      { id: "kopenhagen", nameHr: "Kopenhagen", nameEn: "Copenhagen", countryHr: "Danska", countryEn: "Denmark", flag: "🇩🇰", pop: 644000, isCapital: true, lat: 55.6761, lng: 12.5683, factHr: "Kip Male sirene u Kopenhagenu inspiriran je bajkom Hansa Christiana Andersena.", factEn: "The Little Mermaid statue in Copenhagen was inspired by Hans Christian Andersen's fairy tale." },
+      { id: "lisabon", nameHr: "Lisabon", nameEn: "Lisbon", countryHr: "Portugal", countryEn: "Portugal", flag: "🇵🇹", pop: 545000, isCapital: true, lat: 38.7223, lng: -9.1393, factHr: "Lisabon je izgrađen na sedam brežuljaka s pogledom na Atlantski ocean.", factEn: "Lisbon is famously built across seven hills overlooking the estuary of the Tagus River." },
+      { id: "dublin", nameHr: "Dublin", nameEn: "Dublin", countryHr: "Irska", countryEn: "Ireland", flag: "🇮🇪", pop: 592000, isCapital: true, lat: 53.3498, lng: -6.2603, factHr: "Dublin je osnovan kao vikinško naselje u 9. stoljeću.", factEn: "Dublin was originally established as a Viking settlement in the 9th century." },
+      { id: "bukurest", nameHr: "Bukurešt", nameEn: "Bucharest", countryHr: "Rumunjska", countryEn: "Romania", flag: "🇷🇴", pop: 1716000, isCapital: true, lat: 44.4268, lng: 26.1025, factHr: "Palača parlamenta u Bukureštu druga je najveća upravna zgrada na svijetu.", factEn: "Bucharest's Palace of the Parliament is the world's heaviest and second-largest administrative building." },
+      { id: "sofija", nameHr: "Sofija", nameEn: "Sofia", countryHr: "Bugarska", countryEn: "Bulgaria", flag: "🇧🇬", pop: 1236000, isCapital: true, lat: 42.6977, lng: 23.3219, factHr: "Sofija ima više od 7.000 godina dugu povijest i bogata je mineralnim izvorima.", factEn: "Sofia sits atop ancient thermal mineral springs that have been used for millennia." },
+      { id: "bratislava", nameHr: "Bratislava", nameEn: "Bratislava", countryHr: "Slovačka", countryEn: "Slovakia", flag: "🇸🇰", pop: 475000, isCapital: true, lat: 48.1486, lng: 17.1077, factHr: "Bratislava je jedini glavni grad na svijetu koji graniči s dvjema suverenim državama (Austrija i Mađarska).", factEn: "Bratislava is the only capital city in the world bordering two independent nations." },
+      { id: "barcelona", nameHr: "Barcelona", nameEn: "Barcelona", countryHr: "Španjolska", countryEn: "Spain", flag: "🇪🇸", pop: 1620000, isCapital: false, lat: 41.3851, lng: 2.1734, factHr: "Bazilika Sagrada Família u Barceloni gradi se već više od 140 godina.", factEn: "Construction on Antoni Gaudí's Sagrada Família in Barcelona has been ongoing for over 140 years." },
+      { id: "milano", nameHr: "Milano", nameEn: "Milan", countryHr: "Italija", countryEn: "Italy", flag: "🇮🇹", pop: 1350000, isCapital: false, lat: 45.4642, lng: 9.1900, factHr: "Milano je svjetska prijestolnica mode i dizajna.", factEn: "Milan is internationally recognized as a global capital of fashion and design." },
+      { id: "split", nameHr: "Split", nameEn: "Split", countryHr: "Hrvatska", countryEn: "Croatia", flag: "🇭🇷", pop: 160000, isCapital: false, lat: 43.5081, lng: 16.4402, factHr: "Splitska stara gradska jezgra izgrađena je unutar Dioklecijanove palače iz 4. stoljeća.", factEn: "Split's historic center is built directly inside the ancient Roman Palace of Diocletian." },
+      { id: "dubrovnik", nameHr: "Dubrovnik", nameEn: "Dubrovnik", countryHr: "Hrvatska", countryEn: "Croatia", flag: "🇭🇷", pop: 41000, isCapital: false, lat: 42.6507, lng: 18.0944, factHr: "Dubrovnik je poznat po svojim savršeno očuvanim srednjovjekovnim zidinama oko starog grada.", factEn: "Dubrovnik is renowned for its massive stone walls completed in the 16th century." },
+      { id: "reykjavik", nameHr: "Reykjavik", nameEn: "Reykjavik", countryHr: "Island", countryEn: "Iceland", flag: "🇮🇸", pop: 135000, isCapital: true, lat: 64.1466, lng: -21.9426, factHr: "Reykjavik je najsjeverniji glavni grad na svijetu.", factEn: "Reykjavik is the northernmost sovereign capital in the world." },
+      { id: "bruxelles", nameHr: "Bruxelles", nameEn: "Brussels", countryHr: "Belgija", countryEn: "Belgium", flag: "🇧🇪", pop: 178000, isCapital: true, lat: 50.8503, lng: 4.3517, factHr: "Bruxelles služi kao *de facto* glavni grad Europske unije.", factEn: "Brussels serves as the primary administrative capital of the European Union." }
+    ];
+
+    /**
+     * Localization Dictionary (HR & EN)
+     */
+    const I18N = {
+      hr: {
+        dailySub: n => `Dnevni grad #${n}`,
+        unlimitedSub: "Neograničeni način",
+        promptHead: "Pogodi tajanstveni europski grad",
+        helper: "Upiši bilo koji europski grad. Svaki pokušaj otkriva udaljenost s kompasom, usporedbu populacije i status glavnog grada.",
+        placeholder: "Upiši grad (npr. Zagreb, Beč, Prag, Pariz)...",
+        placeholderDone: "Runda je završena!",
+        guessBtn: "Pogodi",
+        shareBtn: "Podijeli rezultat",
+        nextBtn: "Novi grad →",
+        nextDaily: "Sljedeći za:",
+        cols: ["Grad", "Država", "Udaljenost", "Populacija", "Glavni grad"],
+        legendExact: "Točno",
+        legendClose: "Blizu (<500 km)",
+        legendMiss: "Netočno",
+        alreadyGuessed: n => `${n} je već isproban!`,
+        notFound: "Grad nije pronađen u bazi",
+        copied: "Rezultat kopiran u međuspremnik! 📋",
+        statsTitle: "Statistika (Daily)",
+        stLabels: ["Odigrano", "Pobjede", "Niz", "Rekord"],
+        stDist: "Raspodjela pokušaja",
+        yes: "Da 🏛️",
+        no: "Ne ❌"
+      },
+      en: {
+        dailySub: n => `Daily City #${n}`,
+        unlimitedSub: "Unlimited Practice",
+        promptHead: "Guess the Mystery European City",
+        helper: "Type any European city. Each guess shows distance with compass, population comparison, and capital status.",
+        placeholder: "Type a city (e.g. Zagreb, Vienna, Prague, Paris)...",
+        placeholderDone: "Round complete!",
+        guessBtn: "Guess",
+        shareBtn: "Share Result",
+        nextBtn: "Next City →",
+        nextDaily: "Next in:",
+        cols: ["City", "Country", "Distance", "Population", "Capital"],
+        legendExact: "Exact",
+        legendClose: "Close (<500 km)",
+        legendMiss: "Miss",
+        alreadyGuessed: n => `${n} was already guessed!`,
+        notFound: "City not found in database",
+        copied: "Result copied to clipboard! 📋",
+        statsTitle: "Daily Statistics",
+        stLabels: ["Played", "Win %", "Streak", "Max"],
+        stDist: "Guess Distribution",
+        yes: "Yes 🏛️",
+        no: "No ❌"
+      }
+    };
+
+    /**
+     * Game State & Constants
+     */
+    const MAX_ATTEMPTS = 6;
+    const EPOCH_UTC = Date.UTC(2026, 10, 14);
+    const STORAGE_DAILY = "gradar_daily_v1";
+    const STORAGE_STATS = "gradar_stats_v1";
+    const STORAGE_LANG = "gradar_lang_v1";
+
+    let lang = localStorage.getItem(STORAGE_LANG) || "hr";
+    let mode = "daily"; // 'daily' | 'unlimited'
+    let targetCity = null;
+    let guesses = [];
+    let status = "playing"; // 'playing' | 'won' | 'lost'
+    let filteredList = [];
+    let activeDropdownIdx = -1;
+    let timerHandle = null;
+    let toastHandle = null;
+
+    function getCityName(c) {
+      return lang === "hr" ? c.nameHr : c.nameEn;
+    }
+
+    function getCountryName(c) {
+      return lang === "hr" ? c.countryHr : c.countryEn;
+    }
+
+    function getDailyNumber() {
+      const now = new Date();
+      const utcToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      return Math.max(1, Math.floor((utcToday - EPOCH_UTC) / 86400000) + 1);
+    }
+
+    function getDailyCity(num) {
+      const n = CITIES.length;
+      const cycle = Math.floor((num - 1) / n);
+      const offset = (num - 1) % n;
+      const idx = ((offset * 17) + (cycle * 7) + 3) % n;
+      return CITIES[idx];
+    }
+
+    function getRandomCity(excludeId = null) {
+      const pool = excludeId ? CITIES.filter(c => c.id !== excludeId) : CITIES;
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    /**
+     * Haversine Distance & Bearing Compass
+     */
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Earth radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(R * c);
+    }
+
+    function getCompassDirection(lat1, lon1, lat2, lon2) {
+      if (lat1 === lat2 && lon1 === lon2) return "🎯";
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+      const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+                Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+      let brng = Math.atan2(y, x) * 180 / Math.PI;
+      brng = (brng + 360) % 360;
+      const arrows = ["⬆️", "↗️", "➡️", "↘️", "⬇️", "↙️", "⬅️", "↖️"];
+      const index = Math.round(brng / 45) % 8;
+      return arrows[index];
+    }
+
+    function formatPopulation(pop) {
+      if (pop >= 1000000) return `${(pop / 1000000).toFixed(1).replace(/\.0$/, "")}M`;
+      return `${Math.round(pop / 1000)}k`;
+    }
+
+    /**
+     * Comparison Engine
+     */
+    function compareGuess(guess, target) {
+      const exactCity = guess.id === target.id;
+      const exactCountry = guess.countryEn === target.countryEn;
+      const dist = calculateDistance(guess.lat, guess.lng, target.lat, target.lng);
+      const compass = getCompassDirection(guess.lat, guess.lng, target.lat, target.lng);
+
+      // Population comparison
+      const popDiff = target.pop - guess.pop;
+      const popStatus = exactCity || Math.abs(popDiff) <= 50000 ? "exact" : "miss";
+      const popArrow = exactCity || popDiff === 0 ? "✓" : (popDiff > 0 ? "⬆️" : "⬇️");
+
+      // Capital comparison
+      const exactCapital = guess.isCapital === target.isCapital;
+
+      const t = I18N[lang];
+      return [
+        { status: exactCity ? "exact" : "neutral", text: `${guess.flag} ${getCityName(guess)}` },
+        { status: exactCountry ? "exact" : "miss", text: getCountryName(guess) },
+        { status: exactCity ? "exact" : (dist < 500 ? "close" : "miss"), text: `${compass} ${dist} km` },
+        { status: popStatus, text: `${formatPopulation(guess.pop)} ${popArrow}` },
+        { status: exactCapital ? "exact" : "miss", text: guess.isCapital ? t.yes : t.no }
+      ];
+    }
+
+    function tileStyle(st) {
+      if (st === "exact") return "bg-cyan-500 text-slate-950 border-cyan-400/60 font-extrabold shadow-sm shadow-cyan-500/20";
+      if (st === "close") return "bg-amber-500 text-slate-950 border-amber-300/60 font-extrabold shadow-sm shadow-amber-500/20";
+      if (st === "miss") return "bg-slate-800/90 text-slate-200 border-slate-700/70 font-semibold";
+      return "bg-[#192234] text-white border-slate-700 font-bold";
+    }
+
+    /**
+     * Render Grid & UI Sync
+     */
+    function renderGrid(animateLast = false) {
+      const grid = document.getElementById("deductionGrid");
+      grid.innerHTML = "";
+
+      for (let r = 0; r < MAX_ATTEMPTS; r++) {
+        const row = document.createElement("div");
+        row.className = "grid grid-cols-5 gap-1 sm:gap-2";
+        const g = guesses[r];
+
+        if (g) {
+          const tiles = compareGuess(g, targetCity);
+          const anim = animateLast && r === guesses.length - 1;
+
+          tiles.forEach((tile, idx) => {
+            const cell = document.createElement("div");
+            cell.className = `min-h-[54px] sm:min-h-[60px] rounded-xl border px-1 sm:px-2 py-1.5 flex flex-col items-center justify-center text-center leading-tight select-none overflow-hidden ${tileStyle(tile.status)} ${anim ? "animate-tile" : ""}`;
+            if (anim) cell.style.animationDelay = `${idx * 65}ms`;
+
+            cell.innerHTML = `<span class="text-[10px] sm:text-xs md:text-sm tracking-tight break-words w-full">${tile.text}</span>`;
+            row.appendChild(cell);
+          });
+        } else {
+          for (let c = 0; c < 5; c++) {
+            const empty = document.createElement("div");
+            empty.className = "min-h-[54px] sm:min-h-[60px] rounded-xl bg-[#090d16]/75 border border-slate-800/70";
+            row.appendChild(empty);
+          }
+        }
+        grid.appendChild(row);
+      }
+
+      syncAllTexts();
+    }
+
+    function syncAllTexts() {
+      const t = I18N[lang];
+      document.getElementById("langToggleBtn").textContent = lang.toUpperCase();
+      document.getElementById("subtitleText").textContent = mode === "daily" ? t.dailySub(getDailyNumber()) : t.unlimitedSub;
+      document.getElementById("promptHeading").textContent = t.promptHead;
+      document.getElementById("helperSubtext").textContent = t.helper;
+      document.getElementById("guessSubmitBtn").textContent = t.guessBtn;
+      document.getElementById("shareBtnLabel").textContent = t.shareBtn;
+      document.getElementById("nextBtnLabel").textContent = t.nextBtn;
+      document.getElementById("nextDailyText").textContent = t.nextDaily;
+      document.getElementById("legendExact").textContent = t.legendExact;
+      document.getElementById("legendClose").textContent = t.legendClose;
+      document.getElementById("legendMiss").textContent = t.legendMiss;
+
+      t.cols.forEach((label, i) => {
+        const el = document.getElementById(`colHeader${i}`);
+        if (el) el.textContent = label;
+      });
+
+      const input = document.getElementById("cityInput");
+      const submitBtn = document.getElementById("guessSubmitBtn");
+      const attemptEl = document.getElementById("attemptCounter");
+      const endCard = document.getElementById("endResultCard");
+
+      if (status === "playing") {
+        attemptEl.textContent = `Pokušaj ${Math.min(guesses.length + 1, MAX_ATTEMPTS)} / ${MAX_ATTEMPTS}`;
+        input.disabled = false;
+        submitBtn.disabled = false;
+        input.placeholder = t.placeholder;
+        endCard.classList.add("hidden");
+      } else {
+        attemptEl.textContent = status === "won" ? `Pogođeno iz ${guesses.length}/${MAX_ATTEMPTS}!` : `${MAX_ATTEMPTS} / ${MAX_ATTEMPTS}`;
+        input.disabled = true;
+        submitBtn.disabled = true;
+        input.value = "";
+        input.placeholder = t.placeholderDone;
+        closeDropdown();
+
+        document.getElementById("endBadge").textContent = status === "won" ? `Pogođeno iz ${guesses.length}/${MAX_ATTEMPTS}!` : (lang === "hr" ? "Traženi grad bio je" : "The City Was");
+        document.getElementById("endCityTitle").textContent = `${getCityName(targetCity)}, ${getCountryName(targetCity)} ${targetCity.flag}`;
+        document.getElementById("endFunFact").textContent = lang === "hr" ? targetCity.factHr : targetCity.factEn;
+
+        if (mode === "unlimited") {
+          document.getElementById("nextUnlimitedBtn").classList.remove("hidden");
+          document.getElementById("countdownPill").classList.add("hidden");
+        } else {
+          document.getElementById("nextUnlimitedBtn").classList.add("hidden");
+          document.getElementById("countdownPill").classList.remove("hidden");
+          startCountdown();
+        }
+        endCard.classList.remove("hidden");
+      }
+    }
+
+    /**
+     * Guess Handling & Search Autocomplete
+     */
+    function submitCityGuess(city) {
+      if (!city || status !== "playing") return;
+      const t = I18N[lang];
+
+      if (guesses.some(g => g.id === city.id)) {
+        showToast(t.alreadyGuessed(getCityName(city)));
+        shakeSearch();
+        return;
+      }
+
+      guesses.push(city);
+      document.getElementById("cityInput").value = "";
+      closeDropdown();
+
+      if (city.id === targetCity.id) {
+        status = "won";
+      } else if (guesses.length >= MAX_ATTEMPTS) {
+        status = "lost";
+      }
+
+      if (mode === "daily") {
+        const dNum = getDailyNumber();
+        saveDaily(dNum);
+        if (status !== "playing") recordDailyStats(dNum, status === "won", guesses.length);
+      }
+
+      renderGrid(true);
+    }
+
+    function handleManualGuess() {
+      if (status !== "playing") return;
+      const q = document.getElementById("cityInput").value.trim().toLowerCase();
+      if (!q) {
+        shakeSearch();
+        return;
+      }
+
+      if (activeDropdownIdx >= 0 && filteredList[activeDropdownIdx]) {
+        submitCityGuess(filteredList[activeDropdownIdx]);
+        return;
+      }
+
+      const exact = CITIES.find(c => c.nameHr.toLowerCase() === q || c.nameEn.toLowerCase() === q);
+      if (exact) {
+        submitCityGuess(exact);
+        return;
+      }
+
+      if (filteredList.length > 0) {
+        submitCityGuess(filteredList[0]);
+      } else {
+        showToast(I18N[lang].notFound);
+        shakeSearch();
+      }
+    }
+
+    function filterCities(raw) {
+      const q = raw.trim().toLowerCase();
+      if (!q) {
+        closeDropdown();
+        return;
+      }
+
+      const usedIds = new Set(guesses.map(g => g.id));
+      const starts = [];
+      const contains = [];
+
+      for (const c of CITIES) {
+        if (usedIds.has(c.id)) continue;
+        const hr = c.nameHr.toLowerCase();
+        const en = c.nameEn.toLowerCase();
+        if (hr.startsWith(q) || en.startsWith(q)) starts.push(c);
+        else if (hr.includes(q) || en.includes(q)) contains.push(c);
+      }
+
+      filteredList = [...starts, ...contains].slice(0, 8);
+      activeDropdownIdx = filteredList.length > 0 ? 0 : -1;
+      renderDropdown();
+    }
+
+    function renderDropdown() {
+      const list = document.getElementById("dropdownList");
+      if (filteredList.length === 0) {
+        closeDropdown();
+        return;
+      }
+
+      list.innerHTML = "";
+      filteredList.forEach((c, i) => {
+        const li = document.createElement("li");
+        const active = i === activeDropdownIdx;
+        li.className = `px-3.5 py-2.5 flex items-center justify-between gap-2 cursor-pointer transition-colors ${active ? "bg-slate-800 text-white" : "text-slate-200 hover:bg-slate-800/60"}`;
+        const primary = getCityName(c);
+        const country = getCountryName(c);
+
+        li.innerHTML = `
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="text-base leading-none shrink-0">${c.flag}</span>
+            <span class="text-sm font-bold truncate">${primary} <span class="text-xs font-normal text-slate-400">(${country})</span></span>
+          </div>
+          <span class="text-[11px] font-medium text-slate-400 shrink-0">${formatPopulation(c.pop)}</span>
+        `;
+        li.addEventListener("mousedown", e => {
+          e.preventDefault();
+          submitCityGuess(c);
+        });
+        list.appendChild(li);
+      });
+      list.classList.remove("hidden");
+    }
+
+    function closeDropdown() {
+      document.getElementById("dropdownList").classList.add("hidden");
+      filteredList = [];
+      activeDropdownIdx = -1;
+    }
+
+    function shakeSearch() {
+      const el = document.getElementById("searchBoxWrapper");
+      el.classList.remove("animate-shake");
+      void el.offsetWidth;
+      el.classList.add("animate-shake");
+    }
+
+    /**
+     * Mode & Language Switching
+     */
+    function toggleLanguage() {
+      lang = lang === "hr" ? "en" : "hr";
+      localStorage.setItem(STORAGE_LANG, lang);
+      renderGrid(false);
+    }
+
+    function switchMode(newMode) {
+      if (newMode === mode && targetCity) return;
+      mode = newMode;
+      const bDaily = document.getElementById("btnModeDaily");
+      const bUnlim = document.getElementById("btnModeUnlimited");
+
+      if (mode === "daily") {
+        bDaily.className = "px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-cyan-500 text-slate-950 shadow-sm cursor-pointer";
+        bUnlim.className = "px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-300 hover:text-white cursor-pointer";
+        initDaily();
+      } else {
+        bUnlim.className = "px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-cyan-500 text-slate-950 shadow-sm cursor-pointer";
+        bDaily.className = "px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-300 hover:text-white cursor-pointer";
+        startUnlimitedRound();
+      }
+    }
+
+    function initDaily() {
+      const dNum = getDailyNumber();
+      targetCity = getDailyCity(dNum);
+      const saved = loadDaily(dNum);
+      if (saved) {
+        guesses = saved.guesses;
+        status = saved.status;
+      } else {
+        guesses = [];
+        status = "playing";
+      }
+      renderGrid(false);
+    }
+
+    function startUnlimitedRound() {
+      targetCity = getRandomCity(targetCity ? targetCity.id : null);
+      guesses = [];
+      status = "playing";
+      renderGrid(false);
+      document.getElementById("cityInput").focus();
+    }
+
+    /**
+     * LocalStorage Persistence & Stats
+     */
+    function saveDaily(num) {
+      try {
+        localStorage.setItem(STORAGE_DAILY, JSON.stringify({
+          num,
+          ids: guesses.map(g => g.id),
+          status
+        }));
+      } catch (e) {}
+    }
+
+    function loadDaily(num) {
+      try {
+        const raw = localStorage.getItem(STORAGE_DAILY);
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        if (p.num !== num) return null;
+        return {
+          guesses: (p.ids || []).map(id => CITIES.find(c => c.id === id)).filter(Boolean),
+          status: p.status || "playing"
+        };
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function getStats() {
+      try {
+        const raw = localStorage.getItem(STORAGE_STATS);
+        if (raw) {
+          const s = JSON.parse(raw);
+          return {
+            played: s.played || 0,
+            won: s.won || 0,
+            streak: s.streak || 0,
+            max: s.max || 0,
+            lastNum: s.lastNum || 0,
+            dist: Object.assign({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }, s.dist || {})
+          };
+        }
+      } catch (e) {}
+      return { played: 0, won: 0, streak: 0, max: 0, lastNum: 0, dist: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 } };
+    }
+
+    function recordDailyStats(num, won, count) {
+      const s = getStats();
+      if (s.lastNum === num) return;
+      s.played += 1;
+      if (won) {
+        s.won += 1;
+        s.streak = s.lastNum === num - 1 ? s.streak + 1 : 1;
+        s.max = Math.max(s.max, s.streak);
+        if (s.dist[count] !== undefined) s.dist[count] += 1;
+      } else {
+        s.streak = 0;
+      }
+      s.lastNum = num;
+      try {
+        localStorage.setItem(STORAGE_STATS, JSON.stringify(s));
+      } catch (e) {}
+    }
+
+    /**
+     * Viral Emoji Share & Clipboard
+     */
+    function shareResult() {
+      const score = status === "won" ? `${guesses.length}/${MAX_ATTEMPTS}` : `X/${MAX_ATTEMPTS}`;
+      const title = mode === "daily" ? `GRADAR #${getDailyNumber()} ${score} 🗺️` : `GRADAR Unlimited ${score} 🗺️`;
+      const lines = guesses.map(g => {
+        const tiles = compareGuess(g, targetCity);
+        return tiles.map(t => (t.status === "exact" ? "🟩" : t.status === "close" ? "🟨" : "⬛")).join("");
+      });
+      const text = `${title}\n${lines.join("\n")}`;
+
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.top = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand("copy");
+        showToast(I18N[lang].copied);
+      } catch (e) {}
+      document.body.removeChild(ta);
+    }
+
+    function showToast(msg) {
+      const box = document.getElementById("toast");
+      document.getElementById("toastMsg").textContent = msg;
+      box.classList.remove("opacity-0", "translate-y-2");
+      box.classList.add("opacity-100", "translate-y-0");
+      if (toastHandle) clearTimeout(toastHandle);
+      toastHandle = setTimeout(() => {
+        box.classList.remove("opacity-100", "translate-y-0");
+        box.classList.add("opacity-0", "translate-y-2");
+      }, 2400);
+    }
+
+    function startCountdown() {
+      if (timerHandle) clearInterval(timerHandle);
+      const tick = () => {
+        const now = new Date();
+        const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0);
+        const diff = Math.max(0, next - now.getTime());
+        const h = String(Math.floor(diff / 3600000)).padStart(2, "0");
+        const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
+        const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
+        const el = document.getElementById("countdownClock");
+        if (el) el.textContent = `${h}:${m}:${s}`;
+      };
+      tick();
+      timerHandle = setInterval(tick, 1000);
+    }
+
+    /**
+     * Modals
+     */
+    function openModal(id) {
+      document.getElementById(id).classList.remove("hidden");
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.add("hidden");
+    }
+    function closeBackdrop(e, id) {
+      if (e.target.id === id) closeModal(id);
+    }
+
+    function openStatsModal() {
+      const t = I18N[lang];
+      const s = getStats();
+      const pct = s.played > 0 ? Math.round((s.won / s.played) * 100) : 0;
+
+      document.getElementById("statsTitle").textContent = t.statsTitle;
+      document.getElementById("stLblPlayed").textContent = t.stLabels[0];
+      document.getElementById("stLblWin").textContent = t.stLabels[1];
+      document.getElementById("stLblStreak").textContent = t.stLabels[2];
+      document.getElementById("stLblMax").textContent = t.stLabels[3];
+      document.getElementById("stDistTitle").textContent = t.stDist;
+
+      document.getElementById("stPlayed").textContent = s.played;
+      document.getElementById("stWin").textContent = `${pct}%`;
+      document.getElementById("stStreak").textContent = s.streak;
+      document.getElementById("stMax").textContent = s.max;
+
+      const bars = document.getElementById("stBars");
+      bars.innerHTML = "";
+      const peak = Math.max(1, ...Object.values(s.dist));
+      for (let i = 1; i <= 6; i++) {
+        const val = s.dist[i] || 0;
+        const wPct = Math.max(8, Math.round((val / peak) * 100));
+        const highlight = mode === "daily" && status === "won" && guesses.length === i;
+        bars.innerHTML += `
+          <div class="flex items-center gap-2 text-xs">
+            <span class="w-3 font-bold text-slate-400 text-right">${i}</span>
+            <div class="flex-1 bg-[#090d16] rounded-md h-6 overflow-hidden">
+              <div class="h-full px-2 flex items-center justify-end font-bold text-[11px] rounded-md ${highlight ? "bg-cyan-500 text-slate-950" : "bg-slate-700 text-white"}" style="width:${wPct}%">${val}</div>
+            </div>
+          </div>`;
+      }
+      openModal("statsModal");
+    }
+
+    /**
+     * Event Listeners & Boot
+     */
+    window.addEventListener("DOMContentLoaded", () => {
+      const input = document.getElementById("cityInput");
+      input.addEventListener("input", e => filterCities(e.target.value));
+      input.addEventListener("keydown", e => {
+        const hidden = document.getElementById("dropdownList").classList.contains("hidden");
+        if (e.key === "ArrowDown" && !hidden && filteredList.length) {
+          e.preventDefault();
+          activeDropdownIdx = (activeDropdownIdx + 1) % filteredList.length;
+          renderDropdown();
+        } else if (e.key === "ArrowUp" && !hidden && filteredList.length) {
+          e.preventDefault();
+          activeDropdownIdx = (activeDropdownIdx - 1 + filteredList.length) % filteredList.length;
+          renderDropdown();
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          handleManualGuess();
+        } else if (e.key === "Escape") {
+          closeDropdown();
+        }
+      });
+
+      document.addEventListener("click", e => {
+        if (!document.getElementById("searchBoxWrapper").contains(e.target)) closeDropdown();
+      });
+
+      initDaily();
+    });
+  </script>
+</body>
+</html>
